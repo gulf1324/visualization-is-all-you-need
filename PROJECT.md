@@ -92,6 +92,15 @@ flowchart TD
 - REJECTED: failing the build on `stale-edge` — a map legitimately draws
   relationships that are not imports (spawns, HTTP calls, queue writes), so
   unverified edges are reported, never blocked
+- CONSTRAINT: strictness is proportional to code. Edges leaving a node with no
+  parseable source are `unverifiable`, never flagged — a markdown node has no
+  imports, so demanding proof there yields findings nobody can resolve. A
+  permanently noisy report trains its reader to skip it, which is exactly how a
+  real error hides later
+- REJECTED: an `EDGE:` ledger key declaring each non-import edge's evidence
+  type — more precise, but it shifts the work onto the user for every edge, and
+  an annotation people skip buys nothing. Inferring it from the node's own
+  `path:` costs the user zero input
 
 ### validator
 - role: canonical format definition; fails on path rot, diagram/ledger

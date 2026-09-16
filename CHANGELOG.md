@@ -18,7 +18,10 @@ The authoritative current version is stored in `VERSION`.
   `.claude-plugin/` install manifests.
 - `scripts/scan_structure.py`: derives the dependency graph from real imports
   (Python, TS/JS, Go, Rust). `--suggest` bootstraps a map; `--compare` reports
-  `missing-edge`, `stale-edge`, `uncovered`, and map coverage percentage.
+  `missing-edge` (blocking), `stale-edge`, `uncovered`, and map coverage
+  percentage. Strictness is proportional to code: edges leaving a node with no
+  parseable source are counted as `unverifiable` and never flagged, and a
+  project with no parseable source is reported as not machine-verified.
 - `scripts/validate_project_map.py`: canonical format v1 definition. Checks
   path rot, diagram↔ledger correspondence both ways, node id syntax, duplicate
   entries, closed ledger-key vocabulary, declared edge labels, drill-down

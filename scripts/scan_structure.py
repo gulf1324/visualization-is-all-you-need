@@ -347,8 +347,22 @@ def cmd_compare(root: Path, map_path: Path, quiet: bool = False) -> int:
     code_edges = collapse(file_edges, assign)
 
     missing = sorted(set(code_edges) - map_edges)
-    stale = sorted(map_edges - set(code_edges))
     uncovered = sorted(f for f in files if f not in assign)
+
+    # A node whose `path:` holds no parseable source cannot originate a
+    # provable edge — a markdown file has no imports. Demanding proof there
+    # produces a permanent wall of findings, and a report that is always noisy
+    # trains the reader to skip it, which is how a real error later hides in
+    # the list. So: only edges leaving a node with parseable source are held to
+    # the import standard. Strictness is for code; the rest is reported as
+    # unverifiable and not counted.
+    code_nodes = set(assign.values())
+    stale: List[Tuple[str, str]] = []
+    unverifiable: List[Tuple[str, str]] = []
+    for a, b in sorted(map_edges - set(code_edges)):
+        if a not in nodes or b not in nodes:
+            continue
+        (stale if a in code_nodes else unverifiable).append((a, b))
 
     for f, first, second in sorted(conflicts):
         print(f"warn: {f} is claimed by both `{first}` and `{second}`; "
@@ -362,8 +376,8 @@ def cmd_compare(root: Path, map_path: Path, quiet: bool = False) -> int:
     # on every commit, and a noisy gate is a gate that gets disabled.
     if not quiet:
         for a, b in stale:
-            if a in nodes and b in nodes:
-                print(f"stale-edge: {a} -> {b}  (drawn in the map, no import evidence)", file=sys.stdout)
+            print(f"stale-edge: {a} -> {b}  (node `{a}` has source, but no import proves this edge)",
+                  file=sys.stdout)
 
         if uncovered:
             shown = uncovered[:10]
@@ -376,7 +390,14 @@ def cmd_compare(root: Path, map_path: Path, quiet: bool = False) -> int:
     pct = (100.0 * covered / len(files)) if files else 100.0
     print(f"\ncoverage: {covered}/{len(files)} source files mapped ({pct:.0f}%)")
     print(f"edges: {len(code_edges)} in code, {len(map_edges)} in map, "
-          f"{len(missing)} missing, {len(stale)} unverified")
+          f"{len(missing)} missing, {len(stale)} unverified, "
+          f"{len(unverifiable)} unverifiable")
+    if unverifiable:
+        print(f"note: {len(unverifiable)} edge(s) leave a node with no parseable source "
+              f"(docs, config, shell); those are not held to the import standard")
+    if not files:
+        print("note: no parseable source found — this map's structure is NOT "
+              "machine-verified. Say so rather than implying it was checked.")
 
     if missing:
         print(f"\nFAILED: {len(missing)} import edge(s) exist in code but not in the map", file=sys.stderr)

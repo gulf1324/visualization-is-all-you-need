@@ -115,6 +115,12 @@ fix it in the same session and tell the user what was wrong.
   imports, DI containers, and runtime wiring are invisible to it.
 - `stale-edge` is a report, not a verdict. Spawns, HTTP calls, and queue writes
   are real relationships with no import to prove them.
+- **Strictness is proportional to code.** Edges leaving a node with no
+  parseable source (docs, config, shell) are reported as `unverifiable` and
+  never flagged — a markdown file has no imports, so demanding proof there
+  would produce findings nobody can ever resolve. If a project has no parseable
+  source at all, the map is **not** machine-verified: tell the user that
+  plainly instead of letting the clean exit code imply otherwise.
 - Mermaid auto-layout means adding a node can reshuffle the whole picture and
   invalidate the human's spatial memory. Prefer small, additive edits.
 

@@ -148,8 +148,28 @@ Verified mechanically by `scan_structure.py --compare`:
   well-formed, and it is the one that fails a commit.
 - `uncovered` — source files no node's `path:` claims, reported with a coverage
   percentage. New code that nobody mapped shows up here.
-- `stale-edge` — an edge with no import evidence. **Reported, never fatal**: a
-  spawn, an HTTP call, or a queue write is a real dependency with no import.
+- `stale-edge` — an edge **leaving a node that has parseable source**, with no
+  import proving it. **Reported, never fatal**: a spawn, an HTTP call, or a
+  queue write is a real dependency with no import.
+- `unverifiable` — an edge leaving a node whose `path:` holds no parseable
+  source (docs, config, shell). Counted separately and never flagged.
+
+### Strictness is proportional to how much code a node has
+
+A markdown file has no imports, so demanding import evidence from a
+documentation node produces findings that can never be resolved. A report that
+is permanently noisy trains its reader to skip it, and that is precisely how a
+real error hides later. So the import standard applies only where there is code
+to apply it to:
+
+| Node's `path:` contains | Edges leaving it |
+|---|---|
+| parseable source (`.py`, `.ts`/`.js`, `.go`, `.rs`) | held to the import standard → `stale-edge` if unproven |
+| anything else (docs, config, shell, assets) | `unverifiable`, not flagged |
+
+When a project has **no** parseable source at all, `--compare` says so
+explicitly: the map's structure is not machine-verified, and that must be
+stated rather than implied away.
 
 Not verifiable, and never to be claimed:
 

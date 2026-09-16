@@ -77,6 +77,9 @@ that was tried and abandoned leaves no trace in the code at all.
   imports, and runtime wiring are invisible to it.
 - `stale-edge` is a report, not a verdict — spawns, HTTP calls, and queue
   writes are real dependencies with no import to prove them.
+- Strictness is proportional to code: edges leaving a docs/config/shell node
+  are `unverifiable`, not errors. A project with no parseable source gets a map
+  that is useful but explicitly **not** machine-verified.
 
 See `references/spec.md` for the format, `references/diagram-vocabulary.md` for
 choosing a diagram kind, and `PROJECT.md` for this repo mapped with its own
