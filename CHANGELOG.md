@@ -31,3 +31,5 @@ The authoritative current version is stored in `VERSION`.
 - `.githooks/pre-commit`: runs both scripts so map rot cannot land silently.
   Bypass with `PROJECT_MAP_SKIP=1` for deliberate WIP commits.
 - `CLAUDE.md`: project-specific instructions plus the map entry rule.
+- `LICENSE`: MIT, matching the `license` field already declared in
+  `.claude-plugin/plugin.json`.

@@ -146,9 +146,13 @@ flowchart TD
   no escape hatch gets disabled wholesale, which is strictly worse
 
 ### release
-- role: SemVer state and change history
+- role: SemVer state, change history, and distribution terms
 - path: VERSION
 - path: CHANGELOG.md
+- path: LICENSE
+- CONTRACT: `LICENSE` must agree with `"license"` in `.claude-plugin/plugin.json`.
+  A public skill that declares MIT without shipping the text gives users nothing
+  they can rely on
 - INVARIANT: `VERSION` is the single source of truth for the current version
 - CONSTRAINT: no release automation yet — that needs a registry and token
   decision, so bumping is manual per `CONTRIBUTING.md`

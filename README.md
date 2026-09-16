@@ -27,7 +27,7 @@ same file as text. Nothing is duplicated, so nothing can desynchronize.
 ## Install
 
 ```bash
-npx skills add gulf1324/orca-omp-harness@project-map
+npx skills add gulf1324/visualization-is-all-you-need
 ```
 
 Or copy `SKILL.md`, `references/`, and `scripts/` into your project's skills
