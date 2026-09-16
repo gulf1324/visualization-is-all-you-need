@@ -50,6 +50,23 @@ UNBOUND_PATH = "-"  # explicit "this node has no code" marker
 
 NODE_WARN_LIMIT = 30  # above this a human stops reading the diagram
 
+# Visual encoding. Every load-bearing signal is ASCII text inside the node
+# label, because ASCII/terminal Mermaid renderers drop `classDef` colour and
+# often normalize node shapes — a signal carried only by colour is invisible to
+# whoever reads the diagram in a terminal. Colour and shape stay as optional
+# enhancement; these sigils are the contract.
+SIGIL_ENTRY = "*"      # nothing depends on this node: start reading here
+SIGIL_DRILLDOWN = "+"  # has a `map:` child
+SIGIL_NOCODE = "~"     # `path: -` only: no code behind this node
+SIGILS = SIGIL_ENTRY + SIGIL_DRILLDOWN + SIGIL_NOCODE
+
+# Labels must be quoted so the label text can be read back and checked.
+LABEL_RE = re.compile(
+    r"(?P<id>[A-Za-z_](?:[\w-]*[A-Za-z0-9_])?)\s*[\[\(\{>/\\]+\s*\"(?P<label>[^\"]*)\""
+)
+LABEL_SPLIT = "<br/>"
+ROLE_LABEL_MAX = 52  # a label line longer than this stops being scannable
+
 # Lines that open a construct but are not nodes.
 NON_NODE_HEADS = {
     "subgraph", "end", "direction", "style", "classDef", "class", "click",
@@ -359,6 +376,15 @@ def parse_map(path: Path) -> Tuple[Dict[str, str], Dict[str, int], List[Tuple[in
     return meta, meta_lines, block, entries, diags
 
 
+def _norm(text: str) -> str:
+    """Collapse case, whitespace and trailing punctuation for label matching.
+
+    The label is a shortened `role:`, so an exact match is the wrong test; what
+    must hold is that the label does not say something the ledger does not.
+    """
+    return re.sub(r"[\s\u00a0]+", " ", text.strip().lower()).rstrip(" .,;:—-")
+
+
 def validate(path: Path, root: Path, visited: Set[Path]) -> List[Diag]:
     name = path.as_posix()
     resolved = path.resolve()
@@ -411,6 +437,60 @@ def validate(path: Path, root: Path, visited: Set[Path]) -> List[Diag]:
         for lineno, a, b, label in edges:
             if label and label not in edge_kinds:
                 diags.append(Diag("error", name, lineno, f'edge {a}->{b} is labeled "{label}", which is not in `edges:`/`edge-kinds:` ({", ".join(sorted(edge_kinds)) or "none declared"})'))
+
+    # --- Visual encoding ------------------------------------------------
+    # The diagram is the human-facing projection. A box holding only an id
+    # forces a ledger round-trip per node, so the label carries the role, and
+    # ASCII sigils carry the facts a reader needs before deciding where to
+    # look: where to start, what can be opened, what has no code.
+    if kind == "flowchart" and block:
+        labels: Dict[str, Tuple[int, str]] = {}
+        for lineno, raw in block:
+            for m in LABEL_RE.finditer(raw.split("%%", 1)[0]):
+                labels.setdefault(m.group("id"), (lineno, m.group("label")))
+
+        incoming = {b for _, _, b, _ in edges}
+        for node_id, node_line in sorted(nodes.items(), key=lambda kv: kv[1]):
+            entry = entries.get(node_id)
+            if entry is None:
+                continue
+            got = labels.get(node_id)
+            if got is None:
+                diags.append(Diag("warn", name, node_line, f'node "{node_id}" has no quoted label; a bare id forces the reader into the ledger for every node'))
+                continue
+            lineno, label = got
+            parts = [p.strip() for p in label.split(LABEL_SPLIT)]
+            head = parts[0]
+            marks = ""
+            while head and head[-1] in SIGILS:
+                marks = head[-1] + marks
+                head = head[:-1].rstrip()
+
+            wants_drill = bool(entry.first("map"))
+            paths = [v for _, v in entry.values.get("path", [])]
+            wants_nocode = bool(paths) and all(p == UNBOUND_PATH for p in paths)
+            is_entry = node_id not in incoming
+
+            if wants_drill != (SIGIL_DRILLDOWN in marks):
+                verb = "must" if wants_drill else "must not"
+                diags.append(Diag("error", name, lineno, f'node "{node_id}" {verb} carry the `{SIGIL_DRILLDOWN}` sigil: `map:` is {"set" if wants_drill else "absent"}'))
+            if wants_nocode != (SIGIL_NOCODE in marks):
+                verb = "must" if wants_nocode else "must not"
+                diags.append(Diag("error", name, lineno, f'node "{node_id}" {verb} carry the `{SIGIL_NOCODE}` sigil: `path:` is {"`-` only" if wants_nocode else "bound to code"}'))
+            if SIGIL_ENTRY in marks and not is_entry:
+                diags.append(Diag("error", name, lineno, f'node "{node_id}" carries the `{SIGIL_ENTRY}` entry sigil but something depends on it'))
+            if is_entry and SIGIL_ENTRY not in marks:
+                diags.append(Diag("warn", name, lineno, f'nothing depends on "{node_id}"; mark it `{SIGIL_ENTRY}` so a reader knows where to start'))
+
+            role = entry.first("role") or ""
+            if len(parts) < 2 or not parts[1]:
+                diags.append(Diag("warn", name, lineno, f'label for "{node_id}" has no role line; add `{LABEL_SPLIT}<short role>` so the diagram answers "what is this" without a lookup'))
+            else:
+                shown = parts[1]
+                if len(shown) > ROLE_LABEL_MAX:
+                    diags.append(Diag("warn", name, lineno, f'role line for "{node_id}" is {len(shown)} chars; keep it under {ROLE_LABEL_MAX} or the box stops being scannable'))
+                if not _norm(role).startswith(_norm(shown)):
+                    diags.append(Diag("error", name, lineno, f'label for "{node_id}" says "{shown}", which is not how `role:` starts ("{role[:ROLE_LABEL_MAX]}") — the diagram and the ledger disagree'))
 
     children: List[Path] = []
     for slug, entry in entries.items():

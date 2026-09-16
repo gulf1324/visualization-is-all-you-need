@@ -342,25 +342,44 @@ def cmd_suggest(root: Path, depth: int) -> int:
     for f, node in assign.items():
         members.setdefault(node, []).append(f)
 
+    # Emit the skeleton already carrying the visual encoding. If the generator
+    # produced bare ids, every user would have to add labels and sigils by
+    # hand, and a standard that costs manual effort on every node does not get
+    # followed. The placeholder role is deliberately identical in label and
+    # ledger so the map validates as-is.
+    incoming = {b for _, b in node_edges}
+    entries = [n for n in sorted(members) if n not in incoming]
+    placeholder = "TODO describe this"
+
     print(f"# scanned {len(files)} source files, {len(file_edges)} internal imports, "
           f"{len(members)} candidate nodes at depth {depth}\n")
     print("```mermaid")
     print("flowchart TD")
     for node in sorted(members):
-        print(f'  {node}["{node}"]')
-    for (a, b), (src, dst) in sorted(node_edges.items()):
+        mark = " *" if node in entries else ""
+        shape = ("([", "])") if node in entries else ("[", "]")
+        print(f'  {node}{shape[0]}"{node}{mark}<br/>{placeholder}"{shape[1]}')
+    for (a, b), _evidence in sorted(node_edges.items()):
         print(f"  {a} --> {b}")
+    if entries:
+        print("  classDef entry fill:#1f6feb,stroke:#58a6ff,color:#ffffff")
+        print(f"  class {','.join(entries)} entry")
     print("```\n")
+    print("Arrows mean **depends-on** unless labeled.")
+    print("`*` nothing depends on it — start reading here · "
+          "`+` has a drill-down map · `~` no code behind it.\n")
     print("## Nodes\n")
     for node in sorted(members):
         paths = sorted(members[node])
         shared = paths[0].rsplit("/", 1)[0] if "/" in paths[0] else "."
         print(f"### {node}")
-        print(f"- role: TODO — what is this responsible for ({len(paths)} files)")
+        print(f"- role: {placeholder} — responsibility of these {len(paths)} file(s)")
         print(f"- path: {shared}/")
         print()
     print("# Candidate only. Verify every node and edge, merge nodes you cannot")
-    print("# describe in one line, then add INVARIANT/CONSTRAINT/REJECTED from the user.")
+    print("# describe in one line, replace every TODO in both the label and the")
+    print("# ledger (they must agree), then add INVARIANT/CONSTRAINT/REJECTED")
+    print("# from the user.")
     if len(members) > 30:
         print(f"# warn: {len(members)} nodes exceeds the 30-node readability limit; "
               f"re-run with --depth 1 or plan drill-downs")

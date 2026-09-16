@@ -9,8 +9,10 @@ You maintain `PROJECT.md`: one artifact, two projections. The human reads the
 rendered Mermaid diagram. You read the same file as text. Nothing is duplicated,
 so nothing can desynchronize.
 
-`references/spec.md` is the format. `references/diagram-vocabulary.md` picks the
-diagram kind. `references/workflows.md` has the three loops.
+`references/spec.md` is the format. `references/visual-encoding.md` is how the
+diagram is made legible to a human — read it before drawing anything.
+`references/diagram-vocabulary.md` picks the diagram kind.
+`references/workflows.md` has the three loops.
 
 Two scripts do the mechanical work — stdlib-only Python, no install step:
 
@@ -28,22 +30,29 @@ When a document and `validate_project_map.py` disagree, the validator wins.
    diagram. If "left means upstream" or "top means entry point" is not written
    as an edge or a ledger line, that meaning does not exist for you. Never
    encode information in visual position.
-2. **The diagram carries structure; the ledger carries 'why'.** Mermaid `%%`
+2. **The diagram must answer the first questions without a lookup.** A box
+   holding only an id costs the reader one ledger round-trip per node. Labels
+   carry `name<br/>short role`, and the sigils `*` (start here), `+` (has a
+   drill-down), `~` (no code) carry the rest. Every one is derived from a
+   ledger fact, so the validator catches drift. Colour and shape are
+   enhancement only — a terminal renderer drops them.
+3. **The diagram carries structure; the ledger carries 'why'.** Mermaid `%%`
    comments are stripped by every renderer, so a human never sees them — putting
-   the 'why' there silently breaks the human half of the contract. Node labels
-   stay short; the 'why' goes in the `## Nodes` ledger keyed by node id.
-3. **Every node binds to a real path.** `path:` is what makes rot mechanically
+   the 'why' there silently breaks the human half of the contract. A label
+   holds a name and a one-line role, never a rationale; the 'why' goes in the
+   `## Nodes` ledger keyed by node id.
+4. **Every node binds to a real path.** `path:` is what makes rot mechanically
    detectable. A node with no code is legal but must say so with `path: -`.
-4. **Draw edges from evidence, not from belief.** Your impression of "what
+5. **Draw edges from evidence, not from belief.** Your impression of "what
    depends on what" is a guess; an import is proof. Run the scanner and start
    from its edges. Where a real relationship is not an import (a spawn, an HTTP
    call, a queue write), draw it and say in `role:` how you verified it.
-5. **A wrong map is worse than no map.** It misleads the human and poisons your
+6. **A wrong map is worse than no map.** It misleads the human and poisons your
    own context. An unverifiable relationship gets said in words, not drawn as a
    confident arrow.
-6. **Never let the map exceed what a human can hold.** Above 30 nodes,
+7. **Never let the map exceed what a human can hold.** Above 30 nodes,
    comprehension goes negative. Split into `map:` drill-downs instead.
-7. **`REJECTED` is the highest-value line in the file.** Structure can be
+8. **`REJECTED` is the highest-value line in the file.** Structure can be
    re-derived from code; a decision that was considered and rejected cannot.
    Record it whenever the user reveals one.
 

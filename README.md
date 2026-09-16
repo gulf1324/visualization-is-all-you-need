@@ -45,6 +45,30 @@ python scripts/validate_project_map.py PROJECT.md   # format + path rot
 python scripts/scan_structure.py --compare PROJECT.md   # accuracy vs the code
 ```
 
+## What the diagram looks like
+
+A box that holds only an id tells a reader nothing but its connections, and
+costs one ledger lookup per node. So the label carries the role, and ASCII
+sigils carry the rest:
+
+```mermaid
+flowchart TD
+  cli(["cli *<br/>argument parsing, exit codes"]) --> engine["engine<br/>runs the pipeline"]
+  engine -->|writes| store[["store +<br/>persistence, migrations"]]
+  engine -.->|charges| stripe["Stripe ~<br/>card charges and webhooks"]
+  classDef entry fill:#1f6feb,stroke:#58a6ff,color:#ffffff
+  class cli entry
+```
+
+`*` nothing depends on it — start here · `+` has a drill-down map · `~` no code
+behind it.
+
+Each sigil is derived from a ledger fact (`in-degree 0`, `map:`, `path: -`), so
+the validator rejects one that disagrees. The signals are ASCII on purpose:
+terminal Mermaid renderers drop `classDef` colour and normalize shapes, so a
+fact carried only by colour would be invisible to anyone reading in a terminal.
+Colour and shape are enhancement, never the only carrier.
+
 ## The two problems it actually solves
 
 **Accuracy.** An agent's sense of "what depends on what" is a guess. Edges come

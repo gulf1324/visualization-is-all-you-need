@@ -73,7 +73,34 @@ headings one-to-one, in both directions:
 - node in diagram, no ledger entry → **error**
 - ledger entry, not in diagram → **error**
 
-Keep labels short. A label is a name, not an explanation.
+A `subgraph` is a container, not a node: it needs no ledger entry, and
+`container --> node` is legal.
+
+#### Labels and sigils
+
+Labels are quoted and carry two lines — the display name and a shortened
+`role:` (≤ 52 chars), joined by `<br/>`:
+
+```
+scanner["scan_structure.py<br/>derives the real dependency graph"]
+```
+
+The role is duplicated into the label on purpose: it is what lets a reader
+understand a node without opening the ledger. The duplication is checked —
+line 2 must be how `role:` **starts**, or it is an error.
+
+Sigils append to the display name and are each derived from a ledger fact:
+
+| Sigil | Meaning | Derived from |
+|---|---|---|
+| `*` | nothing depends on it — start here | in-degree 0 |
+| `+` | has a drill-down | `map:` present |
+| `~` | no code behind it | every `path:` is `-` |
+
+A sigil that disagrees with the ledger is an error; a missing `*` on an
+in-degree-0 node is a warning. Shapes and `classDef` colour are optional
+enhancement and are not validated — a terminal renderer drops them, so the
+facts live in the sigils. Full rationale in `visual-encoding.md`.
 
 ### 4. `## Nodes` — the ledger
 

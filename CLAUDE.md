@@ -27,7 +27,8 @@ installable by copy or by `npx skills add`.
 - `scripts/validate_project_map.py` is the canonical format definition. When a
   document disagrees with it, change the document or change both — never leave
   them in conflict. The format vocabulary appears in the validator constants,
-  `references/spec.md`, and `SKILL.md`; a vocabulary change touches all three.
+  `references/spec.md`, `references/visual-encoding.md`, and `SKILL.md`; a
+  vocabulary or sigil change touches all four.
 - Scripts are **stdlib-only Python 3.8+**. A user must be able to run them with
   no install step. Never add a dependency, and never use 3.9+ syntax
   (`dict[str]`, `X | None`) in `scripts/` — the `typing` imports are

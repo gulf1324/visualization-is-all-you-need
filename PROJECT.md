@@ -12,23 +12,26 @@
 ```mermaid
 flowchart TD
   subgraph shipped["installed into the user's project"]
-    skill["SKILL.md"]
-    spec["references/spec.md"]
-    vocabulary["references/diagram-vocabulary.md"]
-    workflows["references/workflows.md"]
-    scanner["scan_structure.py"]
-    validator["validate_project_map.py"]
-    plugin[".claude-plugin/"]
+    skill["SKILL.md<br/>agent entry point"]
+    spec["spec.md<br/>human-readable definition of the PROJECT.md"]
+    encoding["visual-encoding.md<br/>how the diagram stays legible"]
+    vocabulary["diagram-vocabulary.md<br/>closed set of five diagram kinds"]
+    workflows["workflows.md<br/>the Init / Update / Read loops"]
+    scanner["scan_structure.py<br/>derives the real dependency graph"]
+    validator["validate_project_map.py<br/>canonical format definition"]
+    plugin([".claude-plugin/ *<br/>install manifests"])
   end
   subgraph dogfood["this repo, proving the format on itself"]
-    self_map["PROJECT.md"]
-    claude_md["CLAUDE.md"]
-    commit_gate[".githooks/"]
-    release["VERSION + CHANGELOG"]
+    self_map["PROJECT.md<br/>this file — the format applied to the repo"]
+    claude_md(["CLAUDE.md *<br/>project-specific instructions"])
+    commit_gate([".githooks/ *<br/>git hooks — Conventional Commits"])
+    release["VERSION / CHANGELOG<br/>SemVer state, change history"]
   end
   plugin --> skill
   skill -->|reads| spec
   skill -->|reads| vocabulary
+  skill -->|reads| encoding
+  encoding -->|mirrors| validator
   skill -->|reads| workflows
   workflows -->|runs| scanner
   workflows -->|runs| validator
@@ -39,7 +42,13 @@ flowchart TD
   commit_gate -->|runs| scanner
   commit_gate -->|enforces| release
   claude_md -->|points-at| self_map
+  classDef entry fill:#1f6feb,stroke:#58a6ff,color:#ffffff
+  class plugin,claude_md,commit_gate entry
 ```
+
+Arrows mean **depends-on** unless labeled.
+`*` nothing depends on it — start reading here · `+` has a drill-down map ·
+`~` no code behind it.
 
 ## Nodes
 
@@ -60,6 +69,21 @@ flowchart TD
   the map machine-first, and the whole premise is that one artifact serves a
   human directly. Executable validator plus prose mirror keeps the artifact
   human-shaped
+
+### encoding
+- role: how the diagram stays legible to a human — labels, sigils, layout
+- path: references/visual-encoding.md
+- INVARIANT: every load-bearing signal is ASCII text inside the label. Colour
+  and shape are enhancement only, because terminal renderers drop `classDef`
+  and normalize shapes — a fact carried only by colour is invisible to half the
+  readers, which is the same failure as putting the 'why' in a `%%` comment
+- CONSTRAINT: each sigil must be derivable from a ledger fact, or it cannot be
+  validated and will drift into decoration
+- REJECTED: encoding node kind by colour alone — reads beautifully on GitHub
+  and carries nothing in a terminal
+- REJECTED: leaving labels as bare ids to avoid duplicating `role:` — it saves
+  a drift risk the validator already eliminates, at the cost of one ledger
+  round-trip per node, which is the whole legibility problem
 
 ### vocabulary
 - role: closed set of five diagram kinds and the rule for choosing one

@@ -33,6 +33,17 @@ The authoritative current version is stored in `VERSION`.
 - `CLAUDE.md`: project-specific instructions plus the map entry rule.
 - `LICENSE`: MIT, matching the `license` field already declared in
   `.claude-plugin/plugin.json`.
+- `references/visual-encoding.md`: the diagram's legibility standard. Two-line
+  labels (`name<br/>short role`), ASCII sigils `*` (start here), `+` (has a
+  drill-down), `~` (no code), a legend restating edge semantics next to the
+  picture, and layout-stability rules. Every signal is text because terminal
+  renderers drop `classDef` colour and normalize shapes; colour and shape are
+  enhancement only.
+- Validator enforces the encoding: label line 2 must be how `role:` starts,
+  `+`/`~` must agree with `map:`/`path: -`, `*` is rejected on a node that
+  something depends on, and a bare id or missing role line warns.
+- `--suggest` emits the encoding already applied — labels, entry sigils,
+  shapes, `classDef`, and the legend — and its output validates unedited.
 
 ### Fixed
 

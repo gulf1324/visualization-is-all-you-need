@@ -55,6 +55,19 @@ The inverse matters too: an import the scanner found and you chose not to draw
 is a decision you must be able to defend (usually "both files are inside one
 node"). Declare `edges:` and any `edge-kinds:` you use.
 
+### 3b. Make it legible — not optional
+
+`scan_structure.py --suggest` already emits two-line labels, `*` on every
+in-degree-0 node, and the legend. Keep them. Replace the `TODO describe this`
+placeholder in **both** the label and `role:` — they must agree or the
+validator rejects the map.
+
+Then add the sigils the generator cannot know: `+` on any node you gave a
+`map:`, `~` on any node whose only `path:` is `-`. Read
+`visual-encoding.md` for the reasoning; the short version is that a box holding
+only an id costs the reader a ledger lookup per node, which is the whole
+problem this artifact exists to solve.
+
 ### 4. Fill the ledger — mechanical first, then ask
 
 `role:` and `path:` you can derive yourself. The UPPERCASE keys mostly you
