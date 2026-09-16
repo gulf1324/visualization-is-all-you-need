@@ -61,35 +61,41 @@ NON_NODE_HEADS = {
     "Container_Boundary", "Boundary", "Node_Boundary",
 }
 
-FLOW_DEF_RE = re.compile(r"^\s*(?P<id>[A-Za-z_][\w-]*)\s*(?:\[|\(|\{|>)")
+# A mermaid id may contain hyphens, but a trailing hyphen would swallow the
+# first dash of an arrow: `api-v2-->store` must yield `api-v2`, not `api-v2--`.
+ID = r"[A-Za-z_](?:[\w-]*[A-Za-z0-9_])?"
+
+SUBGRAPH_RE = re.compile(r"^\s*subgraph\s+(?P<id>" + ID + r")")
+FLOW_DEF_RE = re.compile(r"^\s*(?P<id>" + ID + r")\s*(?:\[|\(|\{|>)")
 FLOW_INLINE_EDGE_RE = re.compile(
-    r"(?P<a>[A-Za-z_][\w-]*)\s*--\s*(?P<label>[^>|\-][^>|]*?)\s*-->\s*(?P<b>[A-Za-z_][\w-]*)"
+    r"(?P<a>" + ID + r")\s*--\s*(?P<label>[^>|\-][^>|]*?)\s*-->\s*(?P<b>" + ID + r")"
 )
 FLOW_EDGE_RE = re.compile(
-    r"(?P<a>[A-Za-z_][\w-]*)\s*"
+    r"(?P<a>" + ID + r")\s*"
     r"(?:-{2,3}>|-{3}|-\.-+>|-\.-+|={2,3}>|={3}|--[xo]|x--|o--)\s*"
     r"(?:\|(?P<label>[^|]*)\|\s*)?"
-    r"(?P<b>[A-Za-z_][\w-]*)"
+    r"(?P<b>" + ID + r")"
 )
-SEQ_DECL_RE = re.compile(r"^\s*(?:participant|actor)\s+(?P<id>[A-Za-z_][\w-]*)")
+SEQ_DECL_RE = re.compile(r"^\s*(?:participant|actor)\s+(?P<id>" + ID + r")")
 SEQ_MSG_RE = re.compile(
-    r"^\s*(?P<a>[A-Za-z_][\w-]*)\s*(?:-{1,2}>>?|-{1,2}[x)])\s*\+?-?\s*(?P<b>[A-Za-z_][\w-]*)\s*:"
+    r"^\s*(?P<a>" + ID + r")\s*(?:-{1,2}>>?|-{1,2}[x)])\s*\+?-?\s*(?P<b>" + ID + r")\s*:"
 )
-STATE_DECL_RE = re.compile(r"^\s*state\s+(?:\"[^\"]*\"\s+as\s+)?(?P<id>[A-Za-z_][\w-]*)")
+STATE_DECL_RE = re.compile(r"^\s*state\s+(?:\"[^\"]*\"\s+as\s+)?(?P<id>" + ID + r")")
 STATE_EDGE_RE = re.compile(
-    r"(?P<a>\[\*\]|[A-Za-z_][\w-]*)\s*-->\s*(?P<b>\[\*\]|[A-Za-z_][\w-]*)"
+    r"(?P<a>\[\*\]|" + ID + r")\s*-->\s*(?P<b>\[\*\]|" + ID + r")"
 )
-ER_ENTITY_RE = re.compile(r"^\s*(?P<id>[A-Za-z_][\w-]*)\s*\{")
+ER_ENTITY_RE = re.compile(r"^\s*(?P<id>" + ID + r")\s*\{")
 ER_REL_RE = re.compile(
-    r"^\s*(?P<a>[A-Za-z_][\w-]*)\s+[|}{o][|}{o.\-]*\s+(?P<b>[A-Za-z_][\w-]*)\s*:"
+    r"^\s*(?P<a>" + ID + r")\s+[|}{o][|}{o.\-]*\s+(?P<b>" + ID + r")\s*:"
 )
 C4_DECL_RE = re.compile(
     r"^\s*(?:Person|Person_Ext|System|System_Ext|SystemDb|SystemQueue|Container"
     r"|ContainerDb|ContainerQueue|Component|ComponentDb|Node)\w*\s*\(\s*"
-    r"(?P<id>[A-Za-z_][\w-]*)"
+    r"(?P<id>" + ID + r")"
 )
+# `Rel(...)`, `Rel_U(...)`, and the bidirectional `BiRel*(...)` forms.
 C4_REL_RE = re.compile(
-    r"^\s*Rel\w*\s*\(\s*(?P<a>[A-Za-z_][\w-]*)\s*,\s*(?P<b>[A-Za-z_][\w-]*)"
+    r"^\s*(?:Bi)?Rel\w*\s*\(\s*(?P<a>" + ID + r")\s*,\s*(?P<b>" + ID + r")"
 )
 
 
@@ -166,6 +172,10 @@ def extract_graph(
     """
     nodes: Dict[str, int] = {}
     edges: List[Tuple[int, str, str, Optional[str]]] = []
+    # `subgraph core["core"] ... end` groups nodes; `core --> x` is legal and
+    # means "this group depends on x". A container is not a node and must not
+    # be required to carry a ledger entry.
+    containers: Set[str] = set()
 
     def note(node_id: str, line: int) -> None:
         if node_id and node_id not in NON_NODE_HEADS:
@@ -178,6 +188,10 @@ def extract_graph(
         head = line.strip().split()[0].rstrip(":")
 
         if kind in ("flowchart", "graph"):
+            sg = SUBGRAPH_RE.match(line)
+            if sg:
+                containers.add(sg.group("id"))
+                continue
             m = FLOW_DEF_RE.match(line)
             if m and head not in NON_NODE_HEADS:
                 note(m.group("id"), lineno)
@@ -248,6 +262,8 @@ def extract_graph(
                 note(m.group("b"), lineno)
                 edges.append((lineno, m.group("a"), m.group("b"), None))
 
+    for container in containers:
+        nodes.pop(container, None)
     return nodes, edges
 
 

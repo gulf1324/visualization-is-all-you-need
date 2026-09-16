@@ -220,10 +220,15 @@ def parse_map_nodes(map_path: Path) -> Tuple[Dict[str, List[str]], Set[Tuple[str
     current = ""
     in_mermaid = False
 
+    # Trailing hyphens must not swallow arrow dashes: `api-v2-->store`.
+    ident = r"[A-Za-z_](?:[\w-]*[A-Za-z0-9_])?"
     arrow = re.compile(
-        r"(?P<a>[A-Za-z_][\w-]*)\s*(?:-{2,3}>|-{3}|-\.-+>|={2,3}>|--[xo])\s*(?:\|[^|]*\|\s*)?(?P<b>[A-Za-z_][\w-]*)"
+        r"(?P<a>" + ident + r")\s*(?:-{2,3}>|-{3}|-\.-+>|={2,3}>|--[xo])\s*"
+        r"(?:\|[^|]*\|\s*)?(?P<b>" + ident + r")"
     )
-    inline = re.compile(r"(?P<a>[A-Za-z_][\w-]*)\s*--\s*[^>|]+?\s*-->\s*(?P<b>[A-Za-z_][\w-]*)")
+    inline = re.compile(r"(?P<a>" + ident + r")\s*--\s*[^>|]+?\s*-->\s*(?P<b>" + ident + r")")
+    subgraph = re.compile(r"^\s*subgraph\s+(?P<id>" + ident + r")")
+    containers: Set[str] = set()
 
     for raw in lines:
         fence = re.match(r"^\s*```+\s*(\w+)?\s*$", raw)
@@ -232,6 +237,10 @@ def parse_map_nodes(map_path: Path) -> Tuple[Dict[str, List[str]], Set[Tuple[str
             continue
         if in_mermaid:
             line = raw.split("%%", 1)[0]
+            sg = subgraph.match(line)
+            if sg:
+                containers.add(sg.group("id"))
+                continue
             for pattern in (r'"[^"]*"', r"\[[^\[\]]*\]", r"\([^()]*\)", r"\{[^{}]*\}"):
                 while True:
                     new = re.sub(pattern, " ", line)
@@ -256,35 +265,58 @@ def parse_map_nodes(map_path: Path) -> Tuple[Dict[str, List[str]], Set[Tuple[str
         if kv and current:
             nodes[current].append(kv.group("val").strip())
 
+    # A subgraph is a container, not a node; edges touching one are not
+    # node-to-node relationships the import graph can be compared against.
+    edges = {(a, b) for a, b in edges if a not in containers and b not in containers}
+
     if not nodes:
         problems.append("no `## Nodes` ledger entries found")
     return nodes, edges, problems
 
 
+def pattern_specificity(pattern: str) -> int:
+    """How precisely a `path:` pattern names a location.
+
+    Nested nodes are normal: `core` may claim `src/**` while `db` claims
+    `src/store/`. Whoever is written first in the ledger must not win, or a
+    real cross-node import gets absorbed into one node and the edge silently
+    disappears — the scanner would then report an evidenced edge as unproven,
+    inverting the truth. The more specific pattern owns the file.
+    """
+    literal = re.split(r"[*?\[]", pattern, maxsplit=1)[0]
+    return len([seg for seg in literal.strip("/").split("/") if seg])
+
+
 def assign_by_map(root: Path, files: Sequence[str], nodes: Dict[str, List[str]]) -> Tuple[Dict[str, str], List[Tuple[str, str, str]]]:
-    """Map files to nodes via `path:` globs. Returns (file->node, conflicts)."""
-    assign: Dict[str, str] = {}
+    """Map files to nodes via `path:` globs, most specific pattern winning.
+
+    Returns (file->node, conflicts). A conflict is reported only when two
+    nodes claim a file with equal specificity — a genuinely ambiguous boundary.
+    """
+    best: Dict[str, Tuple[int, str]] = {}
     conflicts: List[Tuple[str, str, str]] = []
+    file_set = set(files)
     for node, patterns in nodes.items():
         for pattern in patterns:
             if pattern == "-":
                 continue
-            matched = globmod.glob(str(root / pattern), recursive=True)
-            for hit in matched:
+            score = pattern_specificity(pattern)
+            for hit in globmod.glob(str(root / pattern), recursive=True):
                 path = Path(hit)
                 if path.is_dir():
-                    members = [p for p in iter_sources(path)]
+                    members = list(iter_sources(path))
                 else:
                     members = [path] if path.suffix in SOURCE_EXT else []
                 for member in members:
                     key = rel(root, member)
-                    if key in files:
-                        prior = assign.get(key)
-                        if prior and prior != node:
-                            conflicts.append((key, prior, node))
-                        else:
-                            assign[key] = node
-    return assign, conflicts
+                    if key not in file_set:
+                        continue
+                    prior = best.get(key)
+                    if prior is None or score > prior[0]:
+                        best[key] = (score, node)
+                    elif score == prior[0] and prior[1] != node:
+                        conflicts.append((key, prior[1], node))
+    return {k: v[1] for k, v in best.items()}, conflicts
 
 
 def collapse(edges: Sequence[Tuple[str, str, str]], assign: Dict[str, str]) -> Dict[Tuple[str, str], Tuple[str, str]]:

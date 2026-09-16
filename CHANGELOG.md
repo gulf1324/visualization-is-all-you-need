@@ -33,3 +33,18 @@ The authoritative current version is stored in `VERSION`.
 - `CLAUDE.md`: project-specific instructions plus the map entry rule.
 - `LICENSE`: MIT, matching the `license` field already declared in
   `.claude-plugin/plugin.json`.
+
+### Fixed
+
+- Node ids no longer swallow arrow dashes. `api-v2-->store` yielded the node
+  `api-v2--`, and `api-->>-client` in a sequence diagram yielded `api-`; both
+  produced phantom nodes and false "missing ledger entry" errors.
+- A `subgraph` id used as an edge endpoint (`core --> b`, legal Mermaid) was
+  treated as a node and demanded a ledger entry. Containers are now excluded
+  from the node set in both scripts.
+- File-to-node assignment now prefers the most specific `path:` pattern. With
+  `core: src/**` and `db: src/store/`, ledger order decided the owner, so a
+  real cross-node import was absorbed into one node and its edge vanished —
+  the scanner then reported an evidenced edge as unproven, inverting the truth.
+- C4 `BiRel*(...)` relationships are now recognized; previously only `Rel*`
+  matched, so bidirectional edges were dropped.
