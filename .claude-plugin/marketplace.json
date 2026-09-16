@@ -1,7 +1,7 @@
 {
   "name": "project-map",
   "description": "Visualization is all you need — a PROJECT.md map that serves humans as a diagram and agents as text, kept honest by an import-graph scanner and a drift validator.",
-  "owner": { "name": "dksck" },
+  "owner": { "name": "gulf1324" },
   "plugins": [
     {
       "name": "project-map",
