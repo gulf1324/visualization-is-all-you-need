@@ -1,0 +1,13 @@
+{
+  "name": "project-map",
+  "description": "Visualization is all you need — a PROJECT.md map that serves humans as a diagram and agents as text, kept honest by an import-graph scanner and a drift validator.",
+  "owner": { "name": "dksck" },
+  "plugins": [
+    {
+      "name": "project-map",
+      "source": "./",
+      "description": "Builds and maintains PROJECT.md: Mermaid structure plus a per-node ledger of invariants, constraints and rejected alternatives. Edges are derived from the real import graph; a validator blocks drift.",
+      "version": "0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Keep PROJECT.md honest at commit time. Wired via: git config core.hooksPath .githooks
+# Bypass for an intentional WIP commit: PROJECT_MAP_SKIP=1 git commit ...
+set -e
+
+[ -f PROJECT.md ] || exit 0
+
+if [ -n "$PROJECT_MAP_SKIP" ]; then
+  echo "pre-commit: PROJECT_MAP_SKIP set, skipping map checks." >&2
+  exit 0
+fi
+
+if command -v python >/dev/null 2>&1; then
+  PY=python
+elif command -v python3 >/dev/null 2>&1; then
+  PY=python3
+else
+  echo "pre-commit: no python found; skipping PROJECT.md checks." >&2
+  exit 0
+fi
+
+if ! "$PY" scripts/validate_project_map.py PROJECT.md --quiet; then
+  echo "" >&2
+  echo "pre-commit: PROJECT.md failed validation. Fix the map, or commit with" >&2
+  echo "            PROJECT_MAP_SKIP=1 if this is a deliberate WIP commit." >&2
+  exit 1
+fi
+
+if ! "$PY" scripts/scan_structure.py --compare PROJECT.md --quiet; then
+  echo "pre-commit: the code contains cross-node imports the map does not draw." >&2
+  echo "            Add the missing edges to PROJECT.md — a structural change is" >&2
+  echo "            not complete until the map reflects it." >&2
+  exit 1
+fi

@@ -1,0 +1,17 @@
+{
+  "name": "project-map",
+  "description": "Visualization is all you need — builds and maintains PROJECT.md, one Mermaid map a human reads as a diagram and an agent reads as text, with per-node invariants, constraints and rejected alternatives. Ships a structure scanner that derives edges from the real import graph and a validator that fails on drift.",
+  "version": "0.1.0",
+  "author": { "name": "dksck" },
+  "homepage": "https://github.com/dksck/visualization_is_all_you_need",
+  "license": "MIT",
+  "keywords": [
+    "mermaid",
+    "architecture",
+    "documentation",
+    "codebase-map",
+    "claude-md",
+    "agentic-coding",
+    "visualization"
+  ]
+}
