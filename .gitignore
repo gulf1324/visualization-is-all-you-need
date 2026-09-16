@@ -1,0 +1,47 @@
+# --- Secrets / local env ---
+.env
+.env.*
+!.env.example
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- Node ---
+node_modules/
+*.tsbuildinfo
+.turbo/
+.next/
+.cache/
+
+# --- Build output ---
+build/
+dist/
+out/
+coverage/
+
+# --- Logs / temp ---
+*.log
+npm-debug.log*
+yarn-error.log*
+tmp/
+.tmp/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Editors ---
+.idea/
+*.swp
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

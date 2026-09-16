@@ -1,0 +1,20 @@
+# Normalize to LF in the repository; checkout uses LF on every platform.
+* text=auto eol=lf
+
+# Shell scripts and hooks must stay LF or git-for-windows cannot exec them.
+*.sh text eol=lf
+.githooks/** text eol=lf
+
+# Notebooks are text but must never be merged automatically.
+*.ipynb text merge=binary diff=
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
