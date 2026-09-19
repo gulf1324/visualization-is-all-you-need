@@ -5,7 +5,7 @@
 ## Meta
 - kind: flowchart
 - edges: depends-on
-- edge-kinds: reads, runs, mirrors, validates, audits, points-at, enforces
+- edge-kinds: reads, runs, mirrors, validates, audits, points-at, enforces, renders
 
 ## Map
 
@@ -19,13 +19,15 @@ flowchart TD
     workflows["workflows.md<br/>the Init / Update / Read loops"]
     scanner["scan_structure.py<br/>derives the real dependency graph"]
     validator["validate_project_map.py<br/>canonical format definition"]
+    dashboard["render_dashboard.py<br/>builds the read-only HTML dashboard"]
     plugin([".claude-plugin/ *<br/>install manifests"])
   end
   subgraph dogfood["this repo, proving the format on itself"]
     self_map["PROJECT.md<br/>this file — the format applied to the repo"]
     claude_md(["CLAUDE.md *<br/>project-specific instructions"])
     commit_gate([".githooks/ *<br/>git hooks — Conventional Commits"])
-    release["VERSION / CHANGELOG<br/>SemVer state, change history"]
+    translation["PROJECT.ko.md<br/>Korean sibling map carrying the same node ids"]
+    release["VERSION / CHANGELOG<br/>SemVer state, change history, and distribution"]
   end
   plugin --> skill
   skill -->|reads| spec
@@ -42,6 +44,11 @@ flowchart TD
   commit_gate -->|runs| scanner
   commit_gate -->|enforces| release
   claude_md -->|points-at| self_map
+  workflows -->|runs| dashboard
+  dashboard -->|reads| validator
+  dashboard -->|renders| self_map
+  dashboard -->|reads| translation
+  translation -->|mirrors| self_map
   classDef entry fill:#1f6feb,stroke:#58a6ff,color:#ffffff
   class plugin,claude_md,commit_gate entry
 ```
@@ -143,6 +150,23 @@ Arrows mean **depends-on** unless labeled.
 - path: .claude-plugin/
 - CONTRACT: `version` here tracks `VERSION`; both must move together on release
 
+### dashboard
+- role: builds the read-only HTML dashboard from the map
+- path: scripts/render_dashboard.py
+- path: references/dashboard.md
+- INVARIANT: the page is a build product with no input element anywhere, so
+  read-only is structural rather than a UI policy. The only path to a different
+  page is: change the code, update the map, re-run the renderer
+- INVARIANT: refuses to render a map that fails validation. A dashboard makes a
+  map look authoritative, and rendering a broken one dresses up rot as a product
+- CONSTRAINT: loads the validator by file path and reuses its parser. A second
+  parser for one format drifts apart by construction
+- CONSTRAINT: Mermaid comes from a CDN. Vendoring ~3 MB contradicts the
+  no-install-step premise; the page says plainly when it cannot load
+- REJECTED: a live server that watches the map — it would invite editing in the
+  browser, and the whole point is that the code is the source and the map is
+  the record
+
 ### self_map
 - role: this file — the format applied to the repo that defines it
 - path: PROJECT.md
@@ -168,6 +192,16 @@ Arrows mean **depends-on** unless labeled.
   interpreter`; enforced by `.gitattributes`
 - CONTRACT: honors `PROJECT_MAP_SKIP=1` for deliberate WIP commits. A gate with
   no escape hatch gets disabled wholesale, which is strictly worse
+
+### translation
+- role: Korean sibling map carrying the same node ids
+- path: PROJECT.ko.md
+- CONTRACT: node ids must match `PROJECT.md` exactly; the renderer refuses to
+  build when they diverge, so a half-updated translation cannot ship
+- REJECTED: inline dual strings (`role.en` / `role.ko`) in one ledger — it
+  doubles every entry and the second language rots the moment someone edits
+  only the first. A sibling file reuses the format unchanged and makes the
+  node-id sets comparable
 
 ### release
 - role: SemVer state, change history, and distribution terms

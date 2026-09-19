@@ -43,7 +43,22 @@ showing you anything.
 python scripts/scan_structure.py --suggest          # derive nodes/edges from the import graph
 python scripts/validate_project_map.py PROJECT.md   # format + path rot
 python scripts/scan_structure.py --compare PROJECT.md   # accuracy vs the code
+python scripts/render_dashboard.py PROJECT.md --open    # read-only HTML dashboard
 ```
+
+## Dashboard
+
+`render_dashboard.py` turns the map into one self-contained HTML file: scroll to
+zoom, drag to pan, click a node for its full ledger entry (`role`, every
+`path:`, and each `INVARIANT` / `CONSTRAINT` / `CONTRACT` / `REJECTED`), and a
+drill-down button on any node that has a child map. An EN/KO toggle switches the
+UI, and — if a `PROJECT.ko.md` sibling exists with the same node ids — the
+diagram labels and the ledger text as well.
+
+It is read-only by construction: the page is a build product with no input
+element in it, so the only way to change what it shows is to change the code,
+update the map, and re-run the renderer. It refuses to render a map that fails
+validation.
 
 ## What the diagram looks like
 

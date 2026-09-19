@@ -13,6 +13,7 @@ so nothing can desynchronize.
 diagram is made legible to a human — read it before drawing anything.
 `references/diagram-vocabulary.md` picks the diagram kind.
 `references/workflows.md` has the three loops.
+`references/dashboard.md` covers the read-only HTML dashboard.
 
 Two scripts do the mechanical work — stdlib-only Python, no install step:
 
@@ -21,6 +22,7 @@ Two scripts do the mechanical work — stdlib-only Python, no install step:
 | `scripts/scan_structure.py --suggest` | derive candidate nodes and **evidence-backed edges** from the real import graph |
 | `scripts/scan_structure.py --compare PROJECT.md` | audit an existing map: edges the code has and the map lacks, edges with no evidence, source files no node covers |
 | `scripts/validate_project_map.py PROJECT.md` | canonical format check — path rot, diagram↔ledger mismatch, undeclared edge labels |
+| `scripts/render_dashboard.py PROJECT.md` | build a read-only HTML dashboard: zoom, click a node for its full ledger entry, EN/KO toggle |
 
 When a document and `validate_project_map.py` disagree, the validator wins.
 

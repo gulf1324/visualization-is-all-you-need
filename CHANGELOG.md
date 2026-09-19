@@ -45,6 +45,15 @@ The authoritative current version is stored in `VERSION`.
 - `--suggest` emits the encoding already applied — labels, entry sigils,
   shapes, `classDef`, and the legend — and its output validates unedited.
 
+- `scripts/render_dashboard.py` + `references/dashboard.md`: a read-only HTML
+  dashboard generated from the map. Wheel zoom and drag pan, click a node for
+  its full ledger entry, drill-down navigation with a back link, and an EN/KO
+  toggle. Read-only is structural — the page is a build product with no input
+  element — and the renderer refuses to build a map that fails validation.
+- Optional content translation through a `PROJECT.<lang>.md` sibling map with
+  identical node ids; the renderer merges it and fails the build when the node
+  id sets diverge. `PROJECT.ko.md` ships as this repo's Korean map.
+
 ### Fixed
 
 - Node ids no longer swallow arrow dashes. `api-v2-->store` yielded the node
