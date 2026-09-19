@@ -376,6 +376,19 @@ def parse_map(path: Path) -> Tuple[Dict[str, str], Dict[str, int], List[Tuple[in
     return meta, meta_lines, block, entries, diags
 
 
+def resolve_binding(root: Path, pattern: str) -> List[str]:
+    """Resolve a `path:` value, treating it as a literal before a glob.
+
+    Next.js route directories are named `[country]`, `[slug]`, `[id]`, which
+    `glob` reads as character classes — the literal directory then never
+    matches itself and a correct binding is reported as missing.
+    """
+    literal = root / pattern
+    if literal.exists():
+        return [str(literal)]
+    return glob.glob(str(literal), recursive=True)
+
+
 def _norm(text: str) -> str:
     """Collapse case, whitespace and trailing punctuation for label matching.
 
@@ -450,6 +463,10 @@ def validate(path: Path, root: Path, visited: Set[Path]) -> List[Diag]:
                 labels.setdefault(m.group("id"), (lineno, m.group("label")))
 
         incoming = {b for _, _, b, _ in edges}
+        # An isolated node trivially has in-degree 0, but "start reading here"
+        # is a lie if it leads nowhere. Entry means: nothing depends on it and
+        # it depends on something. Must match the rule in scan_structure.py.
+        connected = incoming | {a for _, a, _, _ in edges}
         for node_id, node_line in sorted(nodes.items(), key=lambda kv: kv[1]):
             entry = entries.get(node_id)
             if entry is None:
@@ -469,7 +486,7 @@ def validate(path: Path, root: Path, visited: Set[Path]) -> List[Diag]:
             wants_drill = bool(entry.first("map"))
             paths = [v for _, v in entry.values.get("path", [])]
             wants_nocode = bool(paths) and all(p == UNBOUND_PATH for p in paths)
-            is_entry = node_id not in incoming
+            is_entry = node_id not in incoming and node_id in connected
 
             if wants_drill != (SIGIL_DRILLDOWN in marks):
                 verb = "must" if wants_drill else "must not"
@@ -511,7 +528,7 @@ def validate(path: Path, root: Path, visited: Set[Path]) -> List[Diag]:
             if not value:
                 diags.append(Diag("error", name, lineno, f'node "{slug}" has an empty `path:`; use `-` for a node with no code'))
                 continue
-            matches = glob.glob(str(root / value), recursive=True)
+            matches = resolve_binding(root, value)
             if not matches:
                 diags.append(Diag("error", name, lineno, f'node "{slug}" binds to `{value}`, which does not exist under {root.as_posix()}'))
 

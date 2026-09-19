@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import glob as globmod
+import json
 import re
 import sys
 from pathlib import Path
@@ -89,14 +90,104 @@ def rel(root: Path, path: Path) -> str:
         return path.as_posix()
 
 
-def resolve_js(origin: Path, spec: str) -> Optional[Path]:
-    if not spec.startswith("."):
-        return None  # bare specifier: a package, not an internal edge
-    base = (origin.parent / spec).resolve()
-    for suffix in JS_RESOLVE_ORDER:
-        candidate = Path(str(base) + suffix)
-        if candidate.is_file():
-            return candidate
+def strip_jsonc(text: str) -> str:
+    """Remove JSONC comments and trailing commas without touching strings.
+
+    A regex cannot do this: the most common alias pattern is `"@/*"`, whose
+    `/*` reads as the start of a block comment and swallows the rest of the
+    file. That silently produced an empty alias table, which in turn made every
+    Next.js project look edgeless.
+    """
+    out: List[str] = []
+    i, n = 0, len(text)
+    in_string = False
+    while i < n:
+        ch = text[i]
+        if in_string:
+            out.append(ch)
+            if ch == "\\" and i + 1 < n:
+                out.append(text[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                in_string = False
+            i += 1
+            continue
+        if ch == '"':
+            in_string = True
+            out.append(ch)
+            i += 1
+            continue
+        if text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if text.startswith("/*", i):
+            end = text.find("*/", i + 2)
+            i = n if end == -1 else end + 2
+            continue
+        out.append(ch)
+        i += 1
+    return re.sub(r",(\s*[}\]])", r"\1", "".join(out))
+
+
+def load_ts_aliases(root: Path) -> List[Tuple[str, List[Path]]]:
+    """Read `compilerOptions.paths` from tsconfig.json.
+
+    Without this, a Next.js or monorepo codebase looks edgeless: `@/lib/db` is
+    not a relative specifier, so it would be dismissed as an external package.
+    On a real Next.js app that is the overwhelming majority of internal imports,
+    and the map would come out as disconnected boxes.
+    """
+    aliases: List[Tuple[str, List[Path]]] = []
+    config = root / "tsconfig.json"
+    if not config.is_file():
+        config = root / "jsconfig.json"
+        if not config.is_file():
+            return aliases
+    try:
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return aliases
+    text = strip_jsonc(text)
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return aliases
+    options = data.get("compilerOptions") or {}
+    base = (root / (options.get("baseUrl") or ".")).resolve()
+    for pattern, targets in (options.get("paths") or {}).items():
+        if not isinstance(targets, list):
+            continue
+        prefix = pattern[:-1] if pattern.endswith("*") else pattern
+        resolved = [
+            (base / (t[:-1] if t.endswith("*") else t)).resolve()
+            for t in targets if isinstance(t, str)
+        ]
+        if resolved:
+            aliases.append((prefix, resolved))
+    # Longest prefix wins, so `@/lib/` beats `@/`.
+    aliases.sort(key=lambda kv: -len(kv[0]))
+    return aliases
+
+
+def resolve_js(origin: Path, spec: str, aliases: Sequence[Tuple[str, List[Path]]] = ()) -> Optional[Path]:
+    bases: List[Path] = []
+    if spec.startswith("."):
+        bases.append((origin.parent / spec).resolve())
+    else:
+        for prefix, targets in aliases:
+            if spec.startswith(prefix):
+                tail = spec[len(prefix):]
+                bases.extend((target / tail).resolve() if tail else target for target in targets)
+                break
+        if not bases:
+            return None  # bare specifier: a package, not an internal edge
+    for base in bases:
+        for suffix in JS_RESOLVE_ORDER:
+            candidate = Path(str(base) + suffix)
+            if candidate.is_file():
+                return candidate
     return None
 
 
@@ -148,6 +239,7 @@ def build_file_graph(root: Path) -> Tuple[List[str], List[Tuple[str, str, str]]]
     if gomod.is_file():
         found = GO_MODULE_RE.search(gomod.read_text(encoding="utf-8", errors="replace"))
         module_prefix = found.group("mod") if found else None
+    ts_aliases = load_ts_aliases(root)
 
     edges: List[Tuple[str, str, str]] = []
     for path in files:
@@ -172,7 +264,7 @@ def build_file_graph(root: Path) -> Tuple[List[str], List[Tuple[str, str, str]]]
         elif ext in JS_EXT:
             for m in JS_IMPORT_RE.finditer(text):
                 spec = m.group("spec")
-                targets.append((resolve_js(path, spec), spec))
+                targets.append((resolve_js(path, spec, ts_aliases), spec))
         elif ext in GO_EXT:
             for m in GO_IMPORT_RE.finditer(text):
                 spec = m.group("spec")
@@ -195,18 +287,35 @@ def build_file_graph(root: Path) -> Tuple[List[str], List[Tuple[str, str, str]]]
     return [rel(root, f) for f in files], edges
 
 
-def group_by_depth(files: Sequence[str], depth: int) -> Dict[str, str]:
-    """Map each file to a candidate node id by directory prefix."""
+def group_by_depth(files: Sequence[str], depth: int) -> Tuple[Dict[str, str], Dict[str, str]]:
+    """Map each file to a candidate node id, and each node id to its `path:`.
+
+    The path must come from the grouping prefix, not from one member file's
+    directory: taking `dirname(files[0])` produced bindings like
+    `src/app/[country]/@sidebar/board/[slug]/[id]/` for a node that actually
+    covers all of `src/app/`.
+    """
     assign: Dict[str, str] = {}
+    paths: Dict[str, str] = {}
     for f in files:
         parts = f.split("/")
-        prefix = parts[:depth] if len(parts) > depth else parts[:-1] or [parts[0]]
+        if len(parts) > depth:
+            prefix = parts[:depth]
+            location = "/".join(prefix) + "/"
+        elif len(parts) > 1:
+            prefix = parts[:-1]
+            location = "/".join(prefix) + "/"
+        else:
+            # A file at the project root is its own node, bound to the file.
+            prefix = [parts[0]]
+            location = parts[0]
         slug = "_".join(prefix) if prefix else "root"
         slug = re.sub(r"[^a-z0-9_-]+", "_", slug.lower()).strip("_") or "root"
         if not re.match(r"^[a-z]", slug):
             slug = f"n_{slug}"
         assign[f] = slug
-    return assign
+        paths.setdefault(slug, location)
+    return assign, paths
 
 
 def parse_map_nodes(map_path: Path) -> Tuple[Dict[str, List[str]], Set[Tuple[str, str]], List[str]]:
@@ -274,6 +383,20 @@ def parse_map_nodes(map_path: Path) -> Tuple[Dict[str, List[str]], Set[Tuple[str
     return nodes, edges, problems
 
 
+def resolve_binding(root: Path, pattern: str) -> List[str]:
+    """Resolve a `path:` value, treating it as a literal before a glob.
+
+    Next.js route directories are named `[country]`, `[slug]`, `[id]`. To
+    `glob` those brackets are character classes, so a literal directory named
+    `[country]` never matches itself and the binding looks broken. Try the
+    literal path first; fall back to globbing only when it does not exist.
+    """
+    literal = root / pattern
+    if literal.exists():
+        return [str(literal)]
+    return globmod.glob(str(literal), recursive=True)
+
+
 def pattern_specificity(pattern: str) -> int:
     """How precisely a `path:` pattern names a location.
 
@@ -301,7 +424,7 @@ def assign_by_map(root: Path, files: Sequence[str], nodes: Dict[str, List[str]])
             if pattern == "-":
                 continue
             score = pattern_specificity(pattern)
-            for hit in globmod.glob(str(root / pattern), recursive=True):
+            for hit in resolve_binding(root, pattern):
                 path = Path(hit)
                 if path.is_dir():
                     members = list(iter_sources(path))
@@ -336,7 +459,7 @@ def cmd_suggest(root: Path, depth: int) -> int:
         print(f"no source files found under {root.as_posix()} "
               f"(recognized: {', '.join(sorted(SOURCE_EXT))})", file=sys.stderr)
         return 1
-    assign = group_by_depth(files, depth)
+    assign, locations = group_by_depth(files, depth)
     node_edges = collapse(file_edges, assign)
     members: Dict[str, List[str]] = {}
     for f, node in assign.items():
@@ -347,8 +470,13 @@ def cmd_suggest(root: Path, depth: int) -> int:
     # hand, and a standard that costs manual effort on every node does not get
     # followed. The placeholder role is deliberately identical in label and
     # ledger so the map validates as-is.
+    # An entry point is a node nothing depends on *that participates in the
+    # graph*. An isolated node (a stray root-level config file) satisfies
+    # in-degree 0 trivially; marking it `*` tells the reader to start at a leaf
+    # that leads nowhere, and with several of them the sigil becomes noise.
     incoming = {b for _, b in node_edges}
-    entries = [n for n in sorted(members) if n not in incoming]
+    connected = incoming | {a for a, _ in node_edges}
+    entries = [n for n in sorted(members) if n not in incoming and n in connected]
     placeholder = "TODO describe this"
 
     print(f"# scanned {len(files)} source files, {len(file_edges)} internal imports, "
@@ -370,11 +498,11 @@ def cmd_suggest(root: Path, depth: int) -> int:
           "`+` has a drill-down map · `~` no code behind it.\n")
     print("## Nodes\n")
     for node in sorted(members):
-        paths = sorted(members[node])
-        shared = paths[0].rsplit("/", 1)[0] if "/" in paths[0] else "."
+        count = len(members[node])
+        shared = locations.get(node, ".")
         print(f"### {node}")
-        print(f"- role: {placeholder} — responsibility of these {len(paths)} file(s)")
-        print(f"- path: {shared}/")
+        print(f"- role: {placeholder} — responsibility of these {count} file(s)")
+        print(f"- path: {shared}")
         print()
     print("# Candidate only. Verify every node and edge, merge nodes you cannot")
     print("# describe in one line, replace every TODO in both the label and the")

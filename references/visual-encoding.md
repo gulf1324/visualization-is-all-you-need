@@ -105,6 +105,16 @@ keep it usable:
 - Prefer additive edits. Rewriting the whole block for a cosmetic reason costs
   the reader their memory of the layout for nothing.
 - Above 30 nodes, split into `map:` drill-downs instead of shrinking labels.
+- **Collapse a fan of same-kind leaves.** More than about four leaf nodes
+  hanging off one parent are laid out in a single row, and the diagram grows
+  sideways until the labels collide. Measured on a real map: five sibling
+  library nodes produced a 7704 px-wide image with overlapping text; folding
+  them into one `+` node with a drill-down brought it to 3650 px and removed
+  the collisions. `subgraph ... direction TB` does **not** fix this — Mermaid
+  ignores a subgraph's direction when the subgraph has edges to outside nodes.
+- **Keep the display name short in a stadium node.** `(["..."])` clips its
+  label earlier than a rectangle does; a long first line gets cut off with no
+  warning from any tool.
 
 ## Generated for you
 

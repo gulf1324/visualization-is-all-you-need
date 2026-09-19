@@ -59,3 +59,19 @@ The authoritative current version is stored in `VERSION`.
   the scanner then reported an evidenced edge as unproven, inverting the truth.
 - C4 `BiRel*(...)` relationships are now recognized; previously only `Rel*`
   matched, so bidirectional edges were dropped.
+- TypeScript/JavaScript path aliases (`compilerOptions.paths`) are now
+  resolved. On a real Next.js app the scanner saw 22 of 183 internal imports
+  and drew **zero** edges, because `@/lib/x` looked like an external package.
+- JSONC comment stripping no longer destroys `tsconfig.json`. A regex treated
+  the `/*` inside the alias pattern `"@/*"` as a block-comment opener and ate
+  the rest of the file, silently yielding an empty alias table.
+- `--suggest` binds each node to its grouping prefix. It used to emit the
+  directory of one member file, producing bindings like
+  `src/app/[country]/@sidebar/board/[slug]/[id]/` for a node covering all of
+  `src/app/`. Root-level files now bind to the file, not `./`.
+- `path:` values are resolved literally before being globbed, so Next.js route
+  directories (`[country]`, `[slug]`) no longer read as glob character classes
+  and report a correct binding as missing.
+- An isolated node is no longer marked as an entry point. In-degree 0 is
+  trivially true for a disconnected node, and "start reading here" pointing at
+  a leaf that leads nowhere turned the `*` sigil into noise.
